@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decline Curve Analysis with Machine Learning</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        .sidebar {
+            width: 380px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 0;
+            height: fit-content;
+        }
+        
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid #e8ecef;
+        }
+        
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #5a9fd4;
+            margin-bottom: 15px;
+        }
+        
+        .control-group {
+            margin-bottom: 18px;
+        }
+        
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        .control-value {
+            color: #d9534f;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .ml-value {
+            color: #34a853;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #5a9fd4;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #5a9fd4;
+            cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #5a9fd4;
+            cursor: pointer;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-train {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-predict {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-primary {
+            background: #5a9fd4;
+            color: white;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 13px;
+            text-align: center;
+            display: none;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 13px;
+            text-align: center;
+            display: none;
+        }
+        
+        .equation-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            position: relative;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 3px;
+        }
+        
+        .metrics-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .metric-box {
+            text-align: center;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        .metric-traditional {
+            color: #d9534f;
+        }
+        
+        .metric-ml {
+            color: #34a853;
+        }
+        
+        .info-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e8ecef;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            position: relative;
+            transition: color 0.3s ease;
+        }
+        
+        .tab.active {
+            color: #333;
+        }
+        
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #5a9fd4;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .tab-content h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .tab-content p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        
+        .tab-content ul {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+        
+        .tab-content li {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .tab-content strong {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        #chart {
+            width: 100%;
+            height: 400px;
+        }
+        
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 10px;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        
+        .ml-technique-info {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        
+        .model-status {
+            padding: 8px;
+            background: #f0f8ff;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .model-trained {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .model-not-trained {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Decline Curve Analysis with Machine Learning</h1>
+    </div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3 class="section-title">Well Selection</h3>
+                <select id="wellSelect">
+                    <option value="well1">Well 1</option>
+                    <option value="well2">Well 2</option>
+                    <option value="well3" selected>Well 3</option>
+                    <option value="well4">Well 4</option>
+                </select>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="section-title">Decline Curve Parameters</h3>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Initial Production (qi)</span>
+                        <span class="control-value" id="qiValue">800</span>
+                    </div>
+                    <input type="range" id="qiSlider" min="100" max="1500" value="800" step="10">
+                </div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Decline Rate (Di)</span>
+                        <span class="control-value" id="diValue">0.05</span>
+                    </div>
+                    <input type="range" id="diSlider" min="0.01" max="0.20" value="0.05" step="0.01">
+                </div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Decline Exponent (b)</span>
+                        <span class="control-value" id="bValue">0.5</span>
+                    </div>
+                    <input type="range" id="bSlider" min="0" max="1" value="0.5" step="0.1">
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="section-title">Machine Learning Settings</h3>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>ML Technique</span>
+                    </div>
+                    <select id="mlTechnique">
+                        <option value="polynomial">Polynomial Regression</option>
+                        <option value="svr">Support Vector Regression</option>
+                        <option value="random_forest" selected>Random Forest</option>
+                        <option value="gradient_boost">Gradient Boosting</option>
+                        <option value="neural">Neural Network</option>
+                        <option value="lstm">LSTM (Time Series)</option>
+                        <option value="knn">K-Nearest Neighbors</option>
+                        <option value="gaussian">Gaussian Process</option>
+                    </select>
+                    <div class="ml-technique-info" id="techniqueInfo">
+                        Ensemble method using multiple decision trees
+                    </div>
+                </div>
+                <div class="control-group" id="polynomialDegreeControl" style="display: none;">
+                    <div class="control-label">
+                        <span>Polynomial Degree</span>
+                        <span class="ml-value" id="polyDegreeValue">3</span>
+                    </div>
+                    <input type="range" id="polyDegree" min="2" max="8" value="3" step="1">
+                </div>
+                <div class="control-group" id="knnNeighborsControl" style="display: none;">
+                    <div class="control-label">
+                        <span>Number of Neighbors (K)</span>
+                        <span class="ml-value" id="knnValue">5</span>
+                    </div>
+                    <input type="range" id="knnNeighbors" min="3" max="15" value="5" step="1">
+                </div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Training Data %</span>
+                        <span class="ml-value" id="trainDataValue">80</span>
+                    </div>
+                    <input type="range" id="trainDataPercent" min="50" max="95" value="80" step="5">
+                </div>
+                <div class="control-group" id="learningRateControl">
+                    <div class="control-label">
+                        <span>Learning Rate</span>
+                        <span class="ml-value" id="learningRateValue">0.01</span>
+                    </div>
+                    <input type="range" id="learningRate" min="0.001" max="0.1" value="0.01" step="0.001">
+                </div>
+                <div class="control-group" id="epochsControl">
+                    <div class="control-label">
+                        <span>Epochs/Iterations</span>
+                        <span class="ml-value" id="epochsValue">100</span>
+                    </div>
+                    <input type="range" id="epochs" min="10" max="500" value="100" step="10">
+                </div>
+                <div class="button-group">
+                    <button class="btn-train" id="trainBtn">Train ML Model</button>
+                    <button class="btn-predict" id="predictBtn" disabled>Predict</button>
+                </div>
+                <div class="model-status model-not-trained" id="modelStatus">
+                    Model not trained
+                </div>
+                <div class="success-message" id="successMessage">
+                    Model trained successfully!
+                </div>
+                <div class="error-message" id="errorMessage">
+                    Training failed. Please try different parameters.
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="section-title">Forecast Settings</h3>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Forecast Months</span>
+                        <span class="control-value" id="forecastValue">24</span>
+                    </div>
+                    <input type="range" id="forecastMonths" min="0" max="60" value="24" step="6">
+                </div>
+                <button class="btn-primary" id="resetBtn" style="width: 100%;">Reset Parameters</button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="section-title">Decline Curve Equation</h3>
+                <div class="equation-box">
+                    q(t) = qi / (1 + b × Di × t)<sup>1/b</sup>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #4285f4; width: 8px; height: 8px; border-radius: 50%;"></div>
+                            <span>Actual Production</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ea4335;"></div>
+                            <span>Traditional Decline Curve</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #34a853; border-style: dashed; border-width: 2px 0 0 0;"></div>
+                            <span>ML Prediction</span>
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #6c757d;">Forecast →</div>
+                </div>
+                <div id="chart"></div>
+                <div class="metrics-container">
+                    <div class="metric-box">
+                        <div class="metric-value metric-traditional" id="rmseTraditional">0.00</div>
+                        <div class="metric-label">Traditional RMSE</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value metric-ml" id="rmseML">0.00</div>
+                        <div class="metric-label">ML RMSE</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value metric-traditional" id="r2Traditional">0.00</div>
+                        <div class="metric-label">Traditional R²</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value metric-ml" id="r2ML">0.00</div>
+                        <div class="metric-label">ML R²</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value metric-traditional" id="eurValue">0</div>
+                        <div class="metric-label">EUR (E3m3)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-container">
+                <div class="tabs">
+                    <button class="tab active" data-tab="explanation">Explanation</button>
+                    <button class="tab" data-tab="methodology">Methodology</button>
+                    <button class="tab" data-tab="interpretation">Interpretation</button>
+                    <button class="tab" data-tab="techniques">ML Techniques</button>
+                </div>
+                
+                <div id="explanation" class="tab-content active">
+                    <h3>Decline Curve Analysis</h3>
+                    <p>Decline curve analysis (DCA) is a graphical procedure used for analyzing declining production rates and forecasting future performance of oil and gas wells. This tool demonstrates both traditional DCA and machine learning approaches.</p>
+                    
+                    <p>The traditional approach uses the hyperbolic decline equation: q(t) = qi / (1 + b × Di × t)<sup>1/b</sup>, where:</p>
+                    <ul>
+                        <li><strong>qi</strong> = Initial production rate</li>
+                        <li><strong>Di</strong> = Initial decline rate</li>
+                        <li><strong>b</strong> = Decline exponent (0 = exponential, 1 = harmonic)</li>
+                    </ul>
+                    
+                    <p><strong>Important Note:</strong> ML predictions are based solely on actual production data and are independent of traditional decline curve parameters. Changing qi, Di, or b only affects the red traditional curve, not the ML predictions.</p>
+                </div>
+                
+                <div id="methodology" class="tab-content">
+                    <h3>How to Use ML Prediction</h3>
+                    <ol style="margin-left: 20px; margin-top: 15px;">
+                        <li style="margin-bottom: 10px;">Select a well to load its production data</li>
+                        <li style="margin-bottom: 10px;">Choose an ML technique from the dropdown</li>
+                        <li style="margin-bottom: 10px;">Adjust training data percentage (how much data to use for training vs testing)</li>
+                        <li style="margin-bottom: 10px;">For techniques with hyperparameters, adjust them (e.g., polynomial degree, learning rate)</li>
+                        <li style="margin-bottom: 10px;">Click "Train ML Model" to fit the model to actual production data</li>
+                        <li style="margin-bottom: 10px;">Once trained, "Predict" button becomes active</li>
+                        <li style="margin-bottom: 10px;">Adjust forecast period and click "Predict" to generate new predictions</li>
+                        <li style="margin-bottom: 10px;">Compare ML predictions (green dashed) with traditional decline curve (red)</li>
+                    </ol>
+                    
+                    <h3 style="margin-top: 20px;">Training vs Testing</h3>
+                    <p>The model uses the first X% of data for training and validates on the remaining data. This helps assess how well the model generalizes to unseen data.</p>
+                </div>
+                
+                <div id="interpretation" class="tab-content">
+                    <h3>Understanding the Results</h3>
+                    <p><strong>Performance Metrics:</strong></p>
+                    <ul>
+                        <li><strong>RMSE (Root Mean Square Error):</strong> Average prediction error in production units. Lower is better. Compare Traditional vs ML RMSE to see which performs better.</li>
+                        <li><strong>R² (Coefficient of Determination):</strong> How well the model fits the data. 1.0 is perfect fit, 0 means no better than mean, negative means worse than using the mean.</li>
+                        <li><strong>EUR (Estimated Ultimate Recovery):</strong> Total expected production over well lifetime (30 years).</li>
+                    </ul>
+                    
+                    <p style="margin-top: 15px;"><strong>Model Comparison:</strong></p>
+                    <ul>
+                        <li>If ML RMSE < Traditional RMSE, the ML model better captures the production pattern</li>
+                        <li>R² closer to 1.0 indicates better fit</li>
+                        <li>Look for overfitting: if training error is very low but testing error is high</li>
+                        <li>Simpler models (lower polynomial degree) often generalize better</li>
+                    </ul>
+                    
+                    <p style="margin-top: 15px;"><strong>Best Practices:</strong></p>
+                    <ul>
+                        <li>Start with simpler models before trying complex ones</li>
+                        <li>Use 70-80% data for training, rest for validation</li>
+                        <li>If RMSE is very high, try different techniques</li>
+                        <li>Consider ensemble methods (Random Forest, Gradient Boosting) for noisy data</li>
+                    </ul>
+                </div>
+                
+                <div id="techniques" class="tab-content">
+                    <h3>Machine Learning Techniques</h3>
+                    
+                    <p><strong>Polynomial Regression:</strong></p>
+                    <ul>
+                        <li>Fits polynomial curves of varying degrees</li>
+                        <li>Good for capturing non-linear decline patterns</li>
+                        <li>Higher degrees can overfit - use carefully</li>
+                    </ul>
+                    
+                    <p><strong>Support Vector Regression (SVR):</strong></p>
+                    <ul>
+                        <li>Uses kernel trick to handle non-linear relationships</li>
+                        <li>Robust to outliers in production data</li>
+                        <li>Good for complex decline patterns</li>
+                    </ul>
+                    
+                    <p><strong>Random Forest:</strong></p>
+                    <ul>
+                        <li>Ensemble of decision trees</li>
+                        <li>Reduces overfitting through averaging</li>
+                        <li>Handles noisy production data well</li>
+                    </ul>
+                    
+                    <p><strong>Gradient Boosting:</strong></p>
+                    <ul>
+                        <li>Sequential ensemble method</li>
+                        <li>Often achieves best accuracy</li>
+                        <li>Can model complex patterns</li>
+                    </ul>
+                    
+                    <p><strong>Neural Network:</strong></p>
+                    <ul>
+                        <li>Deep learning approach with hidden layers</li>
+                        <li>Can learn any non-linear pattern</li>
+                        <li>Requires more data and tuning</li>
+                    </ul>
+                    
+                    <p><strong>LSTM (Long Short-Term Memory):</strong></p>
+                    <ul>
+                        <li>Specialized for time series data</li>
+                        <li>Captures temporal dependencies</li>
+                        <li>Good for wells with seasonal patterns</li>
+                    </ul>
+                    
+                    <p><strong>K-Nearest Neighbors:</strong></p>
+                    <ul>
+                        <li>Non-parametric method</li>
+                        <li>Predictions based on similar historical points</li>
+                        <li>Simple but effective for stable decline</li>
+                    </ul>
+                    
+                    <p><strong>Gaussian Process:</strong></p>
+                    <ul>
+                        <li>Probabilistic approach</li>
+                        <li>Provides uncertainty estimates</li>
+                        <li>Good for sparse data</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script>
+        // Generate sample production data for different wells
+        function generateWellData(wellId) {
+            const data = [];
+            const params = {
+                well1: { qi: 500, Di: 0.03, b: 0.4, noise: 30, pattern: 'smooth' },
+                well2: { qi: 700, Di: 0.05, b: 0.6, noise: 40, pattern: 'erratic' },
+                well3: { qi: 800, Di: 0.04, b: 0.5, noise: 50, pattern: 'stepped' },
+                well4: { qi: 600, Di: 0.06, b: 0.7, noise: 35, pattern: 'seasonal' }
+            };
+            
+            const p = params[wellId];
+            const months = 48;
+            
+            for (let t = 0; t < months; t++) {
+                // Hyperbolic decline equation
+                let production = p.qi / Math.pow(1 + p.b * p.Di * t, 1/p.b);
+                
+                // Add different patterns of noise
+                if (p.pattern === 'erratic') {
+                    production += (Math.random() - 0.5) * p.noise * 1.5;
+                } else if (p.pattern === 'stepped') {
+                    if (t % 6 === 0 && t > 0) production *= 0.9;
+                    production += (Math.random() - 0.5) * p.noise;
+                } else if (p.pattern === 'seasonal') {
+                    production += Math.sin(t * 0.5) * 20;
+                    production += (Math.random() - 0.5) * p.noise;
+                } else {
+                    production += (Math.random() - 0.5) * p.noise;
+                }
+                
+                production = Math.max(10, production);
+                
+                data.push({
+                    month: t,
+                    production: production,
+                    date: new Date(2020, t, 1)
+                });
+            }
+            
+            return data;
+        }
+        
+        // Machine Learning Models
+        class MLModels {
+            constructor() {
+                this.model = null;
+                this.type = null;
+                this.trainedData = null;
+                this.isTrained = false;
+                this.trainIndices = null;
+                this.testIndices = null;
+            }
+            
+            train(data, type, params = {}) {
+                this.type = type;
+                this.isTrained = false;
+                
+                // Split data into training and testing
+                const trainPercent = params.trainPercent || 80;
+                const splitIndex = Math.floor(data.length * trainPercent / 100);
+                
+                const trainData = data.slice(0, splitIndex);
+                const testData = data.slice(splitIndex);
+                
+                this.trainIndices = [0, splitIndex];
+                this.testIndices = [splitIndex, data.length];
+                
+                const X_train = trainData.map(d => d.month);
+                const y_train = trainData.map(d => d.production);
+                
+                try {
+                    switch(type) {
+                        case 'polynomial':
+                            this.model = this.polynomialRegression(X_train, y_train, params.degree || 3);
+                            break;
+                        case 'svr':
+                            this.model = this.supportVectorRegression(X_train, y_train, params);
+                            break;
+                        case 'random_forest':
+                            this.model = this.randomForest(X_train, y_train, params);
+                            break;
+                        case 'gradient_boost':
+                            this.model = this.gradientBoosting(X_train, y_train, params);
+                            break;
+                        case 'neural':
+                            this.model = this.neuralNetwork(X_train, y_train, params);
+                            break;
+                        case 'lstm':
+                            this.model = this.lstm(X_train, y_train, params);
+                            break;
+                        case 'knn':
+                            this.model = this.kNearestNeighbors(X_train, y_train, params.k || 5);
+                            break;
+                        case 'gaussian':
+                            this.model = this.gaussianProcess(X_train, y_train, params);
+                            break;
+                    }
+                    
+                    this.isTrained = true;
+                    this.trainedData = { X: X_train, y: y_train };
+                    return true;
+                } catch (error) {
+                    console.error('Training error:', error);
+                    this.isTrained = false;
+                    return false;
+                }
+            }
+            
+            polynomialRegression(X, y, degree) {
+                // Build Vandermonde matrix
+                const n = X.length;
+                const A = [];
+                
+                for (let i = 0; i < n; i++) {
+                    const row = [];
+                    for (let j = 0; j <= degree; j++) {
+                        row.push(Math.pow(X[i], j));
+                    }
+                    A.push(row);
+                }
+                
+                // Solve normal equations: (A^T * A) * coeffs = A^T * y
+                const At = math.transpose(A);
+                const AtA = math.multiply(At, A);
+                const Aty = math.multiply(At, y);
+                
+                // Add regularization to prevent singular matrix
+                for (let i = 0; i < AtA.length; i++) {
+                    AtA[i][i] += 0.001;
+                }
+                
+                const coeffs = math.lusolve(AtA, Aty);
+                
+                return (t) => {
+                    let result = 0;
+                    for (let i = 0; i <= degree; i++) {
+                        result += coeffs[i][0] * Math.pow(t, i);
+                    }
+                    return Math.max(0, result);
+                };
+            }
+            
+            supportVectorRegression(X, y, params) {
+                // Simplified SVR with RBF kernel
+                const gamma = params.gamma || 0.1;
+                const C = params.C || 1.0;
+                const epsilon = params.epsilon || 0.1;
+                
+                // Store support vectors (simplified - use all training data)
+                const supportVectors = X.map((x, i) => ({ x: x, y: y[i], alpha: 0 }));
+                
+                // Simple SMO-like optimization (simplified)
+                for (let iter = 0; iter < 100; iter++) {
+                    for (let i = 0; i < supportVectors.length; i++) {
+                        let prediction = 0;
+                        for (let j = 0; j < supportVectors.length; j++) {
+                            const kernel = Math.exp(-gamma * Math.pow(supportVectors[i].x - supportVectors[j].x, 2));
+                            prediction += supportVectors[j].alpha * kernel;
+                        }
+                        
+                        const error = supportVectors[i].y - prediction;
+                        if (Math.abs(error) > epsilon) {
+                            supportVectors[i].alpha += 0.01 * error;
+                            supportVectors[i].alpha = Math.max(-C, Math.min(C, supportVectors[i].alpha));
+                        }
+                    }
+                }
+                
+                return (t) => {
+                    let prediction = 0;
+                    for (const sv of supportVectors) {
+                        const kernel = Math.exp(-gamma * Math.pow(t - sv.x, 2));
+                        prediction += sv.alpha * kernel + sv.y * 0.01;
+                    }
+                    return Math.max(0, prediction);
+                };
+            }
+            
+            randomForest(X, y, params) {
+                const numTrees = params.numTrees || 50;
+                const maxDepth = params.maxDepth || 5;
+                const trees = [];
+                
+                // Build multiple decision trees
+                for (let i = 0; i < numTrees; i++) {
+                    // Bootstrap sampling
+                    const indices = [];
+                    for (let j = 0; j < X.length; j++) {
+                        indices.push(Math.floor(Math.random() * X.length));
+                    }
+                    
+                    const X_sample = indices.map(idx => X[idx]);
+                    const y_sample = indices.map(idx => y[idx]);
+                    
+                    // Build a simple regression tree
+                    const tree = this.buildRegressionTree(X_sample, y_sample, maxDepth);
+                    trees.push(tree);
+                }
+                
+                return (t) => {
+                    const predictions = trees.map(tree => this.predictTree(tree, t));
+                    return Math.max(0, predictions.reduce((a, b) => a + b, 0) / predictions.length);
+                };
+            }
+            
+            buildRegressionTree(X, y, maxDepth, depth = 0) {
+                if (depth >= maxDepth || X.length < 2) {
+                    return { type: 'leaf', value: y.reduce((a, b) => a + b, 0) / y.length };
+                }
+                
+                // Find best split (simplified)
+                const midpoint = X[Math.floor(X.length / 2)];
+                const leftIndices = [];
+                const rightIndices = [];
+                
+                for (let i = 0; i < X.length; i++) {
+                    if (X[i] < midpoint) {
+                        leftIndices.push(i);
+                    } else {
+                        rightIndices.push(i);
+                    }
+                }
+                
+                if (leftIndices.length === 0 || rightIndices.length === 0) {
+                    return { type: 'leaf', value: y.reduce((a, b) => a + b, 0) / y.length };
+                }
+                
+                return {
+                    type: 'split',
+                    threshold: midpoint,
+                    left: this.buildRegressionTree(
+                        leftIndices.map(i => X[i]),
+                        leftIndices.map(i => y[i]),
+                        maxDepth,
+                        depth + 1
+                    ),
+                    right: this.buildRegressionTree(
+                        rightIndices.map(i => X[i]),
+                        rightIndices.map(i => y[i]),
+                        maxDepth,
+                        depth + 1
+                    )
+                };
+            }
+            
+            predictTree(tree, x) {
+                if (tree.type === 'leaf') {
+                    return tree.value;
+                }
+                return x < tree.threshold ? 
+                    this.predictTree(tree.left, x) : 
+                    this.predictTree(tree.right, x);
+            }
+            
+            gradientBoosting(X, y, params) {
+                const numTrees = params.numTrees || 100;
+                const learningRate = params.learningRate || 0.1;
+                const maxDepth = 3;
+                
+                const trees = [];
+                const predictions = new Array(X.length).fill(0);
+                
+                for (let i = 0; i < numTrees; i++) {
+                    // Calculate residuals
+                    const residuals = y.map((val, idx) => val - predictions[idx]);
+                    
+                    // Fit tree to residuals
+                    const tree = this.buildRegressionTree(X, residuals, maxDepth);
+                    trees.push({ tree: tree, weight: learningRate });
+                    
+                    // Update predictions
+                    for (let j = 0; j < X.length; j++) {
+                        predictions[j] += learningRate * this.predictTree(tree, X[j]);
+                    }
+                }
+                
+                return (t) => {
+                    let prediction = 0;
+                    for (const item of trees) {
+                        prediction += item.weight * this.predictTree(item.tree, t);
+                    }
+                    return Math.max(0, prediction);
+                };
+            }
+            
+            neuralNetwork(X, y, params) {
+                const epochs = params.epochs || 100;
+                const learningRate = params.learningRate || 0.01;
+                
+                // Normalize data
+                const maxX = Math.max(...X);
+                const maxY = Math.max(...y);
+                const X_norm = X.map(x => x / maxX);
+                const y_norm = y.map(y => y / maxY);
+                
+                // Initialize weights
+                const weights = {
+                    w1: Array(5).fill(0).map(() => Math.random() - 0.5),
+                    b1: Array(5).fill(0).map(() => Math.random() - 0.5),
+                    w2: Array(5).fill(0).map(() => Math.random() - 0.5),
+                    b2: Math.random() - 0.5
+                };
+                
+                // Training
+                for (let epoch = 0; epoch < epochs; epoch++) {
+                    for (let i = 0; i < X_norm.length; i++) {
+                        // Forward pass
+                        const hidden = weights.w1.map((w, j) => 
+                            Math.tanh(w * X_norm[i] + weights.b1[j])
+                        );
+                        
+                        const output = weights.w2.reduce((sum, w, j) => 
+                            sum + w * hidden[j], weights.b2
+                        );
+                        
+                        // Backward pass
+                        const error = output - y_norm[i];
+                        
+                        // Update output layer
+                        for (let j = 0; j < 5; j++) {
+                            weights.w2[j] -= learningRate * error * hidden[j];
+                        }
+                        weights.b2 -= learningRate * error;
+                        
+                        // Update hidden layer
+                        for (let j = 0; j < 5; j++) {
+                            const hiddenError = error * weights.w2[j] * (1 - hidden[j] * hidden[j]);
+                            weights.w1[j] -= learningRate * hiddenError * X_norm[i];
+                            weights.b1[j] -= learningRate * hiddenError;
+                        }
+                    }
+                }
+                
+                return (t) => {
+                    const t_norm = t / maxX;
+                    const hidden = weights.w1.map((w, j) => 
+                        Math.tanh(w * t_norm + weights.b1[j])
+                    );
+                    const output = weights.w2.reduce((sum, w, j) => 
+                        sum + w * hidden[j], weights.b2
+                    );
+                    return Math.max(0, output * maxY);
+                };
+            }
+            
+            lstm(X, y, params) {
+                // Simplified LSTM for time series
+                const hiddenSize = 10;
+                const learningRate = params.learningRate || 0.01;
+                const epochs = params.epochs || 100;
+                
+                // Initialize LSTM weights
+                const weights = {
+                    forget: Math.random() - 0.5,
+                    input: Math.random() - 0.5,
+                    output: Math.random() - 0.5,
+                    cell: Math.random() - 0.5,
+                    hidden: Math.random() - 0.5
+                };
+                
+                // Create sequences
+                const sequenceLength = 3;
+                const sequences = [];
+                const targets = [];
+                
+                for (let i = sequenceLength; i < X.length; i++) {
+                    sequences.push(X.slice(i - sequenceLength, i));
+                    targets.push(y[i]);
+                }
+                
+                // Simplified training
+                for (let epoch = 0; epoch < epochs; epoch++) {
+                    for (let i = 0; i < sequences.length; i++) {
+                        const seq = sequences[i];
+                        const target = targets[i];
+                        
+                        // Simple LSTM-like computation
+                        let hidden = 0;
+                        let cell = 0;
+                        
+                        for (const x of seq) {
+                            const forget = 1 / (1 + Math.exp(-(weights.forget * x + hidden * 0.1)));
+                            const input = 1 / (1 + Math.exp(-(weights.input * x + hidden * 0.1)));
+                            const output = 1 / (1 + Math.exp(-(weights.output * x + hidden * 0.1)));
+                            const cellCandidate = Math.tanh(weights.cell * x + hidden * 0.1);
+                            
+                            cell = forget * cell + input * cellCandidate;
+                            hidden = output * Math.tanh(cell);
+                        }
+                        
+                        const prediction = hidden * weights.hidden * 1000;
+                        const error = (prediction - target) / 1000;
+                        
+                        // Update weights
+                        weights.hidden -= learningRate * error * hidden;
+                        weights.forget -= learningRate * error * 0.01;
+                        weights.input -= learningRate * error * 0.01;
+                        weights.output -= learningRate * error * 0.01;
+                        weights.cell -= learningRate * error * 0.01;
+                    }
+                }
+                
+                // Store recent values for prediction
+                const recentX = X.slice(-sequenceLength);
+                const recentY = y.slice(-sequenceLength);
+                
+                return (t) => {
+                    // Use recent pattern for prediction
+                    const timeDiff = t - X[X.length - 1];
+                    const trend = (recentY[recentY.length - 1] - recentY[0]) / sequenceLength;
+                    const prediction = recentY[recentY.length - 1] + trend * timeDiff;
+                    return Math.max(0, prediction);
+                };
+            }
+            
+            kNearestNeighbors(X, y, k) {
+                const data = X.map((x, i) => ({ x: x, y: y[i] }));
+                
+                return (t) => {
+                    // Find k nearest neighbors
+                    const distances = data.map(point => ({
+                        point: point,
+                        distance: Math.abs(point.x - t)
+                    }));
+                    
+                    distances.sort((a, b) => a.distance - b.distance);
+                    const neighbors = distances.slice(0, k);
+                    
+                    // Weighted average based on distance
+                    let weightedSum = 0;
+                    let totalWeight = 0;
+                    
+                    for (const neighbor of neighbors) {
+                        const weight = 1 / (1 + neighbor.distance);
+                        weightedSum += neighbor.point.y * weight;
+                        totalWeight += weight;
+                    }
+                    
+                    return Math.max(0, weightedSum / totalWeight);
+                };
+            }
+            
+            gaussianProcess(X, y, params) {
+                // Simplified Gaussian Process Regression
+                const lengthScale = params.lengthScale || 5;
+                const variance = params.variance || 1;
+                const noise = 0.01;
+                
+                // Compute kernel matrix
+                const n = X.length;
+                const K = [];
+                for (let i = 0; i < n; i++) {
+                    K[i] = [];
+                    for (let j = 0; j < n; j++) {
+                        // RBF kernel
+                        K[i][j] = variance * Math.exp(-Math.pow(X[i] - X[j], 2) / (2 * lengthScale * lengthScale));
+                        if (i === j) K[i][j] += noise;
+                    }
+                }
+                
+                // Compute inverse
+                const K_inv = math.inv(K);
+                const alpha = math.multiply(K_inv, y);
+                
+                return (t) => {
+                    // Compute kernel vector for test point
+                    const k_star = X.map(x => 
+                        variance * Math.exp(-Math.pow(x - t, 2) / (2 * lengthScale * lengthScale))
+                    );
+                    
+                    const prediction = math.multiply(k_star, alpha);
+                    return Math.max(0, prediction);
+                };
+            }
+            
+            predict(t) {
+                if (!this.model || !this.isTrained) return null;
+                return this.model(t);
+            }
+        }
+        
+        // Global variables
+        let currentWellData = generateWellData('well3');
+        let mlModel = new MLModels();
+        let svg, xScale, yScale, xAxis, yAxis, line;
+        const margin = {top: 20, right: 80, bottom: 50, left: 80};
+        let width, height;
+        
+        // Initialize the visualization
+        function initChart() {
+            const container = document.getElementById('chart');
+            width = container.offsetWidth - margin.left - margin.right;
+            height = 400 - margin.top - margin.bottom;
+            
+            svg = d3.select('#chart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            // Setup scales
+            xScale = d3.scaleLinear().range([0, width]);
+            yScale = d3.scaleLinear().range([height, 0]);
+            
+            // Setup axes
+            xAxis = svg.append('g')
+                .attr('class', 'x-axis')
+                .attr('transform', `translate(0,${height})`);
+            
+            yAxis = svg.append('g')
+                .attr('class', 'y-axis');
+            
+            // Add axis labels
+            svg.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', 0 - margin.left)
+                .attr('x', 0 - (height / 2))
+                .attr('dy', '1em')
+                .style('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('fill', '#666')
+                .text('Monthly Gas Production (E3m3)');
+            
+            svg.append('text')
+                .attr('transform', `translate(${width / 2}, ${height + margin.bottom})`)
+                .style('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('fill', '#666')
+                .text('Months from First Production');
+            
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid-x')
+                .attr('transform', `translate(0,${height})`)
+                .style('stroke-dasharray', '3,3')
+                .style('opacity', 0.3);
+            
+            svg.append('g')
+                .attr('class', 'grid-y')
+                .style('stroke-dasharray', '3,3')
+                .style('opacity', 0.3);
+            
+            // Add forecast area
+            svg.append('rect')
+                .attr('class', 'forecast-area')
+                .attr('fill', '#f0f0f0')
+                .attr('opacity', 0.3);
+            
+            // Setup line generator
+            line = d3.line()
+                .x(d => xScale(d.month))
+                .y(d => yScale(d.production))
+                .curve(d3.curveMonotoneX);
+            
+            updateVisualization();
+        }
+        
+        function updateVisualization() {
+            const qi = parseFloat(document.getElementById('qiSlider').value);
+            const Di = parseFloat(document.getElementById('diSlider').value);
+            const b = parseFloat(document.getElementById('bSlider').value);
+            const forecastMonths = parseInt(document.getElementById('forecastMonths').value);
+            
+            // Generate forecast data
+            const totalMonths = currentWellData.length + forecastMonths;
+            const allMonths = d3.range(0, totalMonths);
+            
+            // Update scales
+            xScale.domain([0, totalMonths]);
+            yScale.domain([0, d3.max(currentWellData, d => d.production) * 1.1]);
+            
+            // Update axes
+            xAxis.call(d3.axisBottom(xScale).ticks(10));
+            yAxis.call(d3.axisLeft(yScale).ticks(10));
+            
+            // Update grid lines
+            svg.select('.grid-x')
+                .call(d3.axisBottom(xScale).ticks(10).tickSize(-height).tickFormat(''));
+            
+            svg.select('.grid-y')
+                .call(d3.axisLeft(yScale).ticks(10).tickSize(-width).tickFormat(''));
+            
+            // Update forecast area
+            const forecastStart = xScale(currentWellData.length);
+            svg.select('.forecast-area')
+                .attr('x', forecastStart)
+                .attr('y', 0)
+                .attr('width', Math.max(0, width - forecastStart))
+                .attr('height', height);
+            
+            // Add forecast label
+            svg.selectAll('.forecast-label').remove();
+            if (forecastMonths > 0) {
+                svg.append('text')
+                    .attr('class', 'forecast-label')
+                    .attr('x', forecastStart + 10)
+                    .attr('y', 20)
+                    .style('font-size', '11px')
+                    .style('fill', '#999')
+                    .text('Forecast');
+            }
+            
+            // Clear previous lines
+            svg.selectAll('.data-line').remove();
+            svg.selectAll('.data-point').remove();
+            svg.selectAll('.train-test-line').remove();
+            
+            // Plot actual production data
+            svg.selectAll('.data-point')
+                .data(currentWellData)
+                .enter().append('circle')
+                .attr('class', 'data-point')
+                .attr('cx', d => xScale(d.month))
+                .attr('cy', d => yScale(d.production))
+                .attr('r', 3)
+                .attr('fill', '#4285f4')
+                .on('mouseover', function(event, d) {
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.style.opacity = 1;
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY - 10) + 'px';
+                    tooltip.innerHTML = `Month: ${d.month}<br>Production: ${d.production.toFixed(1)} E3m3`;
+                })
+                .on('mouseout', function() {
+                    document.getElementById('tooltip').style.opacity = 0;
+                });
+            
+            // Show train/test split if model is trained
+            if (mlModel.isTrained && mlModel.trainIndices) {
+                const splitX = xScale(mlModel.trainIndices[1]);
+                svg.append('line')
+                    .attr('class', 'train-test-line')
+                    .attr('x1', splitX)
+                    .attr('y1', 0)
+                    .attr('x2', splitX)
+                    .attr('y2', height)
+                    .attr('stroke', '#ff9800')
+                    .attr('stroke-width', 1)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('opacity', 0.5);
+                
+                svg.append('text')
+                    .attr('class', 'train-test-line')
+                    .attr('x', splitX - 5)
+                    .attr('y', height - 10)
+                    .style('font-size', '10px')
+                    .style('fill', '#ff9800')
+                    .style('text-anchor', 'end')
+                    .text('Train');
+                
+                svg.append('text')
+                    .attr('class', 'train-test-line')
+                    .attr('x', splitX + 5)
+                    .attr('y', height - 10)
+                    .style('font-size', '10px')
+                    .style('fill', '#ff9800')
+                    .text('Test');
+            }
+            
+            // Traditional decline curve
+            const traditionalData = allMonths.map(t => ({
+                month: t,
+                production: qi / Math.pow(1 + b * Di * t, 1/b)
+            }));
+            
+            svg.append('path')
+                .datum(traditionalData)
+                .attr('class', 'data-line traditional')
+                .attr('fill', 'none')
+                .attr('stroke', '#ea4335')
+                .attr('stroke-width', 2)
+                .attr('d', line);
+            
+            // ML predictions (only if trained)
+            let mlData = null;
+            if (mlModel.isTrained) {
+                mlData = allMonths.map(t => {
+                    const pred = mlModel.predict(t);
+                    return {
+                        month: t,
+                        production: pred !== null ? pred : 0
+                    };
+                });
+                
+                svg.append('path')
+                    .datum(mlData)
+                    .attr('class', 'data-line ml')
+                    .attr('fill', 'none')
+                    .attr('stroke', '#34a853')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('d', line);
+            }
+            
+            // Calculate metrics
+            updateMetrics(traditionalData, mlData, qi);
+        }
+        
+        function updateMetrics(traditionalData, mlData, qi) {
+            const actual = currentWellData.map(d => d.production);
+            const tradPred = traditionalData.slice(0, currentWellData.length).map(d => d.production);
+            
+            // Traditional metrics
+            const tradRMSE = Math.sqrt(
+                actual.reduce((sum, a, i) => sum + Math.pow(a - tradPred[i], 2), 0) / actual.length
+            );
+            
+            const meanActual = actual.reduce((a, b) => a + b, 0) / actual.length;
+            const ssTotal = actual.reduce((sum, a) => sum + Math.pow(a - meanActual, 2), 0);
+            const tradSSResidual = actual.reduce((sum, a, i) => sum + Math.pow(a - tradPred[i], 2), 0);
+            const tradR2 = 1 - (tradSSResidual / ssTotal);
+            
+            // EUR (30 years)
+            const eur = traditionalData.slice(0, 360).reduce((sum, d) => sum + d.production, 0);
+            
+            document.getElementById('rmseTraditional').textContent = tradRMSE.toFixed(2);
+            document.getElementById('r2Traditional').textContent = tradR2.toFixed(3);
+            document.getElementById('eurValue').textContent = Math.round(eur);
+            
+            // ML metrics (only if trained)
+            if (mlModel.isTrained && mlData) {
+                const mlPred = mlData.slice(0, currentWellData.length).map(d => d.production);
+                
+                const mlRMSE = Math.sqrt(
+                    actual.reduce((sum, a, i) => sum + Math.pow(a - mlPred[i], 2), 0) / actual.length
+                );
+                
+                const mlSSResidual = actual.reduce((sum, a, i) => sum + Math.pow(a - mlPred[i], 2), 0);
+                const mlR2 = 1 - (mlSSResidual / ssTotal);
+                
+                document.getElementById('rmseML').textContent = mlRMSE.toFixed(2);
+                document.getElementById('r2ML').textContent = mlR2.toFixed(3);
+            } else {
+                document.getElementById('rmseML').textContent = '-';
+                document.getElementById('r2ML').textContent = '-';
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('wellSelect').addEventListener('change', function() {
+            currentWellData = generateWellData(this.value);
+            mlModel = new MLModels(); // Reset ML model
+            updateModelStatus(false);
+            updateVisualization();
+        });
+        
+        document.getElementById('qiSlider').addEventListener('input', function() {
+            document.getElementById('qiValue').textContent = this.value;
+            updateVisualization();
+        });
+        
+        document.getElementById('diSlider').addEventListener('input', function() {
+            document.getElementById('diValue').textContent = this.value;
+            updateVisualization();
+        });
+        
+        document.getElementById('bSlider').addEventListener('input', function() {
+            document.getElementById('bValue').textContent = this.value;
+            updateVisualization();
+        });
+        
+        document.getElementById('forecastMonths').addEventListener('input', function() {
+            document.getElementById('forecastValue').textContent = this.value;
+            updateVisualization();
+        });
+        
+        document.getElementById('trainDataPercent').addEventListener('input', function() {
+            document.getElementById('trainDataValue').textContent = this.value;
+        });
+        
+        document.getElementById('learningRate').addEventListener('input', function() {
+            document.getElementById('learningRateValue').textContent = this.value;
+        });
+        
+        document.getElementById('epochs').addEventListener('input', function() {
+            document.getElementById('epochsValue').textContent = this.value;
+        });
+        
+        document.getElementById('polyDegree').addEventListener('input', function() {
+            document.getElementById('polyDegreeValue').textContent = this.value;
+        });
+        
+        document.getElementById('knnNeighbors').addEventListener('input', function() {
+            document.getElementById('knnValue').textContent = this.value;
+        });
+        
+        document.getElementById('mlTechnique').addEventListener('change', function() {
+            const technique = this.value;
+            const info = {
+                'polynomial': 'Fits polynomial curves to capture non-linear decline patterns',
+                'svr': 'Support Vector Regression with RBF kernel for complex patterns',
+                'random_forest': 'Ensemble method using multiple decision trees',
+                'gradient_boost': 'Sequential ensemble method for high accuracy',
+                'neural': 'Deep learning model with hidden layers',
+                'lstm': 'Recurrent neural network for time series',
+                'knn': 'Non-parametric method using similar historical points',
+                'gaussian': 'Probabilistic approach with uncertainty estimates'
+            };
+            
+            document.getElementById('techniqueInfo').textContent = info[technique];
+            
+            // Show/hide specific controls
+            document.getElementById('polynomialDegreeControl').style.display = 
+                technique === 'polynomial' ? 'block' : 'none';
+            
+            document.getElementById('knnNeighborsControl').style.display = 
+                technique === 'knn' ? 'block' : 'none';
+            
+            const needsLearning = ['neural', 'lstm', 'gradient_boost'];
+            document.getElementById('learningRateControl').style.display = 
+                needsLearning.includes(technique) ? 'block' : 'none';
+            document.getElementById('epochsControl').style.display = 
+                needsLearning.includes(technique) ? 'block' : 'none';
+                
+            // Reset model when technique changes
+            mlModel = new MLModels();
+            updateModelStatus(false);
+        });
+        
+        function updateModelStatus(trained) {
+            const status = document.getElementById('modelStatus');
+            const predictBtn = document.getElementById('predictBtn');
+            
+            if (trained) {
+                status.textContent = 'Model trained successfully';
+                status.className = 'model-status model-trained';
+                predictBtn.disabled = false;
+            } else {
+                status.textContent = 'Model not trained';
+                status.className = 'model-status model-not-trained';
+                predictBtn.disabled = true;
+            }
+        }
+        
+        document.getElementById('trainBtn').addEventListener('click', function() {
+            const technique = document.getElementById('mlTechnique').value;
+            const params = {
+                epochs: parseInt(document.getElementById('epochs').value),
+                learningRate: parseFloat(document.getElementById('learningRate').value),
+                trainPercent: parseInt(document.getElementById('trainDataPercent').value),
+                degree: parseInt(document.getElementById('polyDegree').value),
+                k: parseInt(document.getElementById('knnNeighbors').value)
+            };
+            
+            const success = mlModel.train(currentWellData, technique, params);
+            
+            if (success) {
+                updateModelStatus(true);
+                updateVisualization();
+                
+                // Show success message
+                const msg = document.getElementById('successMessage');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+            } else {
+                // Show error message
+                const msg = document.getElementById('errorMessage');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+            }
+        });
+        
+        document.getElementById('predictBtn').addEventListener('click', function() {
+            updateVisualization();
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            document.getElementById('qiSlider').value = 800;
+            document.getElementById('diSlider').value = 0.05;
+            document.getElementById('bSlider').value = 0.5;
+            document.getElementById('forecastMonths').value = 24;
+            document.getElementById('learningRate').value = 0.01;
+            document.getElementById('epochs').value = 100;
+            document.getElementById('trainDataPercent').value = 80;
+            document.getElementById('polyDegree').value = 3;
+            document.getElementById('knnNeighbors').value = 5;
+            
+            document.getElementById('qiValue').textContent = '800';
+            document.getElementById('diValue').textContent = '0.05';
+            document.getElementById('bValue').textContent = '0.5';
+            document.getElementById('forecastValue').textContent = '24';
+            document.getElementById('learningRateValue').textContent = '0.01';
+            document.getElementById('epochsValue').textContent = '100';
+            document.getElementById('trainDataValue').textContent = '80';
+            document.getElementById('polyDegreeValue').textContent = '3';
+            document.getElementById('knnValue').textContent = '5';
+            
+            mlModel = new MLModels();
+            updateModelStatus(false);
+            updateVisualization();
+        });
+        
+        // Setup tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                this.classList.add('active');
+                document.getElementById(this.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // Initialize on load
+        initChart();
+    </script>
+</body>
+</html>
