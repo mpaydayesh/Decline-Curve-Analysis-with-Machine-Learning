@@ -1,5 +1,3 @@
-You're right! I see your repository doesn't have a separate sample_data folder. The sample data is actually embedded directly in the index.html file. Let me update the README to reflect the actual repository structure:
-
 # 📊 Decline Curve Analysis with Machine Learning
 
 An interactive web-based tool for analyzing oil and gas production decline curves using both traditional petroleum engineering methods and advanced machine learning techniques. Built entirely with JavaScript, this tool runs directly in your browser without requiring any backend servers or Python installations.
